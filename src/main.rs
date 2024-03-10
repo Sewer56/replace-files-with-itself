@@ -1,4 +1,4 @@
-#![windows_subsystem = "console"]
+#![windows_subsystem = "windows"]
 
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader};
@@ -16,11 +16,19 @@ fn process_files(file_list_path: &Path) -> io::Result<()> {
         let old_path = path.with_extension("old");
 
         // Perform the file operations
+        println!("Copying {} -> {}", path.display(), new_path.display());
+        if let Err(e) = fs::copy(path, &new_path) {
+            eprintln!("Failed to rename original to .old: {}", e);
+            continue; // Skip to the next line on error
+        }
+
+        println!("Renaming {} -> {}", path.display(), old_path.display());
         if let Err(e) = fs::rename(path, &old_path) {
             eprintln!("Failed to rename original to .old: {}", e);
             continue; // Skip to the next line on error
         }
 
+        println!("Renaming {} -> {}", new_path.display(), path.display());
         if let Err(e) = fs::rename(&new_path, path) {
             eprintln!("Failed to rename .new to original: {}", e);
             // Attempt to restore the original file
@@ -28,6 +36,7 @@ fn process_files(file_list_path: &Path) -> io::Result<()> {
             continue; // Skip to the next line on error
         }
 
+        println!("Removing {}", old_path.display());
         if let Err(e) = fs::remove_file(&old_path) {
             eprintln!("Failed to remove .old file: {}", e);
             // Not critical, so we just log the error and continue
