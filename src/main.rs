@@ -3,7 +3,9 @@
 
 extern crate libc;
 
-use libc::{c_char, c_int, fclose, fgets, fopen, printf, remove, rename, strcat, strcpy, strlen};
+use libc::{
+    c_char, c_int, fclose, fgets, fopen, perror, printf, remove, rename, strcat, strcpy, strlen,
+};
 const BUFFER_SIZE: usize = 65536;
 
 #[no_mangle]
@@ -36,11 +38,25 @@ unsafe extern "C" fn process_files(file_list_path: *const c_char) -> c_int {
             ".old\0".as_ptr() as *const _,
         );
 
-        // Perform file operations here
-        // Example: libc::system(concat!("cp ", exe_file, " ", new_exe_path).as_ptr() as *const _);
-        rename(buffer.as_ptr(), moved_old_exe_path.as_ptr());
-        rename(new_exe_path.as_ptr(), buffer.as_ptr());
-        remove(moved_old_exe_path.as_ptr());
+        // Rename original to .old
+        if rename(buffer.as_ptr(), moved_old_exe_path.as_ptr()) != 0 {
+            perror(b"Error moving file to .old\0".as_ptr() as *const _);
+            fclose(file);
+            return -1;
+        }
+
+        // Rename .new to original
+        if rename(new_exe_path.as_ptr(), buffer.as_ptr()) != 0 {
+            perror(b"Error replacing original with new\0".as_ptr() as *const _);
+            fclose(file);
+            return -1;
+        }
+
+        // Remove .old
+        if remove(moved_old_exe_path.as_ptr()) != 0 {
+            perror(b"Error removing .old file\0".as_ptr() as *const _);
+            fclose(file);
+        }
     }
 
     fclose(file);
