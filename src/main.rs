@@ -1,80 +1,53 @@
 #![windows_subsystem = "console"]
-#![feature(start)]
 
-extern crate libc;
+use std::fs::{self, File};
+use std::io::{self, BufRead, BufReader};
+use std::path::Path;
+use std::process;
 
-use libc::{
-    c_char, c_int, fclose, fgets, fopen, perror, printf, remove, rename, strcat, strcpy, strlen,
-};
-const BUFFER_SIZE: usize = 65536;
+fn process_files(file_list_path: &Path) -> io::Result<()> {
+    let file = File::open(file_list_path)?;
+    let reader = BufReader::new(file);
 
-#[no_mangle]
-unsafe extern "C" fn process_files(file_list_path: *const c_char) -> c_int {
-    // Open the file list
-    let file = fopen(file_list_path, "r".as_ptr() as *const _);
-    if file.is_null() {
-        return -1;
-    }
+    for line in reader.lines() {
+        let line = line?;
+        let path = Path::new(&line);
+        let new_path = path.with_extension("new");
+        let old_path = path.with_extension("old");
 
-    let mut buffer: [c_char; BUFFER_SIZE] = [0; BUFFER_SIZE];
-    while !fgets(buffer.as_mut_ptr(), BUFFER_SIZE as c_int, file).is_null() {
-        // Get file list item.
-        let len = strlen(buffer.as_ptr());
-        let eol_ptr = buffer.as_mut_ptr().offset(len as isize - 1);
-        if len > 0 && *eol_ptr as u8 as char == '\n' {
-            *eol_ptr = 0;
+        // Perform the file operations
+        if let Err(e) = fs::rename(path, &old_path) {
+            eprintln!("Failed to rename original to .old: {}", e);
+            continue; // Skip to the next line on error
         }
 
-        // Manual string appending for ".new" and ".old"
-        let mut new_exe_path = [0 as c_char; BUFFER_SIZE];
-        let mut moved_old_exe_path = [0 as c_char; BUFFER_SIZE];
-
-        strcpy(new_exe_path.as_mut_ptr(), buffer.as_ptr());
-        strcat(new_exe_path.as_mut_ptr(), ".new\0".as_ptr() as *const _);
-
-        strcpy(moved_old_exe_path.as_mut_ptr(), buffer.as_ptr());
-        strcat(
-            moved_old_exe_path.as_mut_ptr(),
-            ".old\0".as_ptr() as *const _,
-        );
-
-        // Rename original to .old
-        if rename(buffer.as_ptr(), moved_old_exe_path.as_ptr()) != 0 {
-            perror(b"Error moving file to .old\0".as_ptr() as *const _);
-            fclose(file);
-            return -1;
+        if let Err(e) = fs::rename(&new_path, path) {
+            eprintln!("Failed to rename .new to original: {}", e);
+            // Attempt to restore the original file
+            let _ = fs::rename(&old_path, path);
+            continue; // Skip to the next line on error
         }
 
-        // Rename .new to original
-        if rename(new_exe_path.as_ptr(), buffer.as_ptr()) != 0 {
-            perror(b"Error replacing original with new\0".as_ptr() as *const _);
-            fclose(file);
-            return -1;
-        }
-
-        // Remove .old
-        if remove(moved_old_exe_path.as_ptr()) != 0 {
-            perror(b"Error removing .old file\0".as_ptr() as *const _);
-            fclose(file);
+        if let Err(e) = fs::remove_file(&old_path) {
+            eprintln!("Failed to remove .old file: {}", e);
+            // Not critical, so we just log the error and continue
         }
     }
 
-    fclose(file);
-
-    0
+    Ok(())
 }
 
-/// # Safety
-#[start]
-pub fn main(argc: isize, argv: *const *const u8) -> isize {
-    unsafe {
-        if argc < 2 {
-            // If not enough arguments are provided, print an error message.
-            printf("Usage: <executable> <path_to_file_list>\0".as_ptr() as *const _);
-            return -1;
-        }
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() < 2 {
+        eprintln!("Usage: <executable> <path_to_file_list>");
+        eprintln!("File List should use UTF-8");
+        process::exit(1);
+    }
 
-        let file_list_path = *argv.offset(1);
-        process_files(file_list_path as *const c_char) as isize
+    let file_list_path = Path::new(&args[1]);
+    if let Err(e) = process_files(file_list_path) {
+        eprintln!("Error processing files: {}", e);
+        process::exit(1);
     }
 }

@@ -7,9 +7,6 @@ repository = "https://github.com/Sewer56/replace-files-with-itself"
 license-file = "LICENSE"
 include = ["src/**/*"]
 
-[dependencies]
-libc = "0.2.153"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
 
