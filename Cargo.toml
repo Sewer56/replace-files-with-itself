@@ -1,0 +1,30 @@
+[package]
+name = "replace-files-with-itself"
+version = "0.1.0"
+edition = "2021"
+description = "Copies a list of files provided via parameter, and replaces the original with the new copy."
+repository = "https://github.com/Sewer56/replace-files-with-itself"
+license-file = "LICENSE"
+include = ["src/**/*"]
+
+[dependencies]
+libc = "0.2.153"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[dev-dependencies]
+
+# Profile Build
+[profile.profile]
+inherits = "release"
+debug = true
+codegen-units = 1
+lto = true
+strip = false  # No stripping!!
+
+# Optimized Release Build
+[profile.release]
+codegen-units = 1
+lto = true
+strip = true  # Automatically strip symbols from the binary.
+panic = "abort"
+
